@@ -1,0 +1,30 @@
+:root { --ink:#172033; --brand:#0f766e; --line:#dde4ea; --paper:#f5f7f8; --danger:#b42318; --warn:#9a6700; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; color:var(--ink); background:var(--paper); }
+a { color:inherit; }
+.shell { min-height:100vh; }
+.topbar { height:64px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 32px; }
+.brand { font-weight:800; letter-spacing:.02em; }
+.brand span { color:var(--brand); }
+.main { max-width:1100px; margin:32px auto; padding:0 20px; }
+.card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(23,32,51,.04); }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+label { display:grid; gap:6px; font-size:13px; font-weight:700; }
+input, select, textarea { width:100%; border:1px solid #cbd5df; border-radius:8px; padding:10px 12px; font:inherit; background:#fff; }
+textarea { min-height:90px; }
+button, .button { border:0; border-radius:8px; padding:10px 14px; font-weight:750; cursor:pointer; background:var(--brand); color:#fff; text-decoration:none; display:inline-block; }
+button.secondary, .button.secondary { background:#edf2f3; color:var(--ink); }
+button.danger { background:var(--danger); }
+button:disabled { opacity:.55; cursor:not-allowed; }
+.table-wrap { overflow:auto; }
+table { width:100%; border-collapse:collapse; background:#fff; }
+th,td { text-align:left; border-bottom:1px solid var(--line); padding:10px 12px; vertical-align:top; }
+th { background:#f8fafb; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+.status { border-radius:999px; padding:4px 8px; font-size:12px; font-weight:800; background:#e9eef1; }
+.status.DRAFT { background:#eef2f4; }.status.SUBMITTED { background:#fff1bd; }.status.APPROVED { background:#d7f5df; color:#126b31; }.status.REJECTED { background:#fde2df; color:#982d23; }
+.error { color:var(--danger); font-size:13px; }.warning { color:var(--warn); }.muted { color:#667085; }
+.field-error { color:var(--danger); font-size:12px; font-weight:500; }
+input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color:var(--danger); background:#fff8f7; }
+.actions { display:flex; gap:8px; flex-wrap:wrap; }
+.login { max-width:420px; margin:12vh auto; }
+.hidden { display:none; }
