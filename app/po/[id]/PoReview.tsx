@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { parseDate, parseMoney } from "@/lib/checks";
+import { addPaise, calculateLineTotalPaise, parseDate, parseMoney, parseQuantity } from "@/lib/checks";
 
 type LineItem = { sku:string; description:string; quantity:number; unitPricePaise:number; lineTotalPaise:number };
 type DraftItem = { sku:string; description:string; quantity:number; unitPrice:string; lineTotal:string };
@@ -11,6 +11,7 @@ type Props = {
   vendorName:string;
   documentTotalPaise:number;
   extractionMethod:string;
+  extractionWarnings:string[];
   status:string;
   lineItems:LineItem[];
   editable:boolean;
@@ -23,7 +24,13 @@ function displayDate(value:string) {
 }
 
 export default function PoReview(props:Props) {
-  const [header, setHeader] = useState({ poNumber:props.poNumber, poDate:displayDate(props.poDate), vendorName:props.vendorName, documentTotal:(props.documentTotalPaise/100).toFixed(2) });
+  const missingExtractedNumber = props.extractionWarnings.some((warning) => warning.startsWith("PO number was not recognized"));
+  const [header, setHeader] = useState({
+    poNumber: missingExtractedNumber ? "" : props.poNumber,
+    poDate:displayDate(props.poDate),
+    vendorName:props.vendorName,
+    documentTotal:(props.documentTotalPaise/100).toFixed(2)
+  });
   const [items, setItems] = useState<DraftItem[]>(props.lineItems.map(item => ({
     sku:item.sku,
     description:item.description,
@@ -35,18 +42,15 @@ export default function PoReview(props:Props) {
   const [notice,setNotice] = useState("");
   const [fieldErrors,setFieldErrors] = useState<Record<string,string>>({});
   const [reason,setReason] = useState("");
+  const [pending,setPending] = useState<"save"|"submit"|"approve"|"reject"|null>(null);
 
   const calculated = useMemo(() => items.reduce((sum,item) => sum + (parseMoney(item.lineTotal) ?? 0),0),[items]);
   const documentTotal = parseMoney(header.documentTotal) ?? 0;
   const lineMathMismatch = items.some(item => {
     const unitPrice = parseMoney(item.unitPrice);
     const lineTotal = parseMoney(item.lineTotal);
-    return !Number.isSafeInteger(Number(item.quantity)) ||
-      Number(item.quantity) <= 0 ||
-      unitPrice === null ||
-      unitPrice <= 0 ||
-      lineTotal === null ||
-      Math.abs(Number(item.quantity) * unitPrice - lineTotal) > 100;
+    const expected = calculateLineTotalPaise(item.quantity, unitPrice ?? 0);
+    return expected === null || lineTotal === null || Math.abs(expected - lineTotal) > 100;
   });
   const poMismatch = items.length > 0 && Math.abs(calculated-documentTotal)>100;
 
@@ -71,18 +75,23 @@ export default function PoReview(props:Props) {
     let lineSum = 0;
     items.forEach((item,index) => {
       const prefix=`lineItems.${index}`;
-      const quantity=Number(item.quantity);
+      const quantity=parseQuantity(item.quantity);
       const unitPrice=parseMoney(item.unitPrice);
       const lineTotal=parseMoney(item.lineTotal);
       if (!item.sku.trim()) errors[`${prefix}.sku`]="SKU is required";
       if (!item.description.trim()) errors[`${prefix}.description`]="Description is required";
-      if (!Number.isSafeInteger(quantity) || quantity <= 0) errors[`${prefix}.quantity`]="Enter a positive whole number";
+      if (quantity === null) errors[`${prefix}.quantity`]="Enter a positive whole number within the supported range";
       if (unitPrice === null || unitPrice <= 0) errors[`${prefix}.unitPrice`]="Enter a positive unit price";
       if (lineTotal === null || lineTotal <= 0) errors[`${prefix}.lineTotal`]="Enter a positive line total";
-      if (lineTotal !== null) lineSum += lineTotal;
-      if (Number.isSafeInteger(quantity) && quantity > 0 && unitPrice !== null && lineTotal !== null &&
-          Math.abs(quantity * unitPrice - lineTotal) > 100) {
-        errors[`${prefix}.lineTotal`]="Quantity × unit price does not match";
+      if (lineTotal !== null) {
+        const nextSum = addPaise(lineSum, lineTotal);
+        if (nextSum === null) errors[`${prefix}.lineTotal`]="Total exceeds the supported range";
+        else lineSum = nextSum;
+      }
+      if (quantity !== null && unitPrice !== null && lineTotal !== null) {
+        const expectedLineTotal = calculateLineTotalPaise(quantity, unitPrice);
+        if (expectedLineTotal === null) errors[`${prefix}.lineTotal`]="Line amount exceeds the supported range";
+        else if (Math.abs(expectedLineTotal - lineTotal) > 100) errors[`${prefix}.lineTotal`]="Quantity × unit price does not match";
       }
     });
     if (total !== null && items.length > 0 && Math.abs(lineSum-total)>100) {
@@ -98,45 +107,70 @@ export default function PoReview(props:Props) {
     setItems(items.map((item,i) => i===index ? {...item,[key]:value} : item));
     clearFieldError(`lineItems.${index}.${key}`);
   }
-  async function save():Promise<boolean> {
+  async function persistDraft():Promise<boolean> {
     setError("");
     setNotice("");
-    const response=await fetch(`/api/pos/${props.id}`,{
-      method:"PATCH", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({...header,lineItems:items})
-    });
-    const data=await response.json();
-    if(!response.ok) {
-      setError(data.error||"Could not save");
-      if (data.duplicate) setFieldErrors({poNumber:data.error});
+    try {
+      const response=await fetch(`/api/pos/${props.id}`,{
+        method:"PATCH", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...header,lineItems:items})
+      });
+      const data=await response.json();
+      if(!response.ok) {
+        setError(data.error||"Could not save");
+        if (data.duplicate) setFieldErrors({poNumber:data.error});
+        return false;
+      }
+      setNotice("Draft saved.");
+      return true;
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
       return false;
     }
-    setNotice("Draft saved.");
-    return true;
+  }
+  async function save() {
+    if (pending) return;
+    setPending("save");
+    await persistDraft();
+    setPending(null);
   }
   async function action(action:"submit"|"approve"|"reject") {
+    if (pending) return;
     setError("");
     setNotice("");
     if (action==="submit") {
       if (!validateForSubmit()) return;
-      if (!await save()) return;
     }
     if (action==="reject" && !reason.trim()) {
-      setFieldErrors({reason:"A rejection reason is required"});
+      setFieldErrors(current => ({...current,reason:"A rejection reason is required"}));
       setError("Enter a rejection reason before rejecting.");
       return;
     }
-    const url = action==="submit" ? `/api/pos/${props.id}/submit` : `/api/pos/${props.id}/decision`;
-    const response=await fetch(url,{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(action==="submit"?{}:{action:action==="approve"?"APPROVE":"REJECT",reason})
-    });
-    const data=await response.json();
-    if(!response.ok) setError(data.error||"Action failed");
-    else if (action === "approve" || action === "reject") window.location.href = "/dashboard";
-    else window.location.reload();
+    setPending(action);
+    try {
+      if (action==="submit" && !await persistDraft()) return;
+      const url = action==="submit" ? `/api/pos/${props.id}/submit` : `/api/pos/${props.id}/decision`;
+      const response=await fetch(url,{
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(action==="submit"?{}:{action:action==="approve"?"APPROVE":"REJECT",reason})
+      });
+      const data=await response.json();
+      if(!response.ok) setError(data.error||"Action failed");
+      else if (action === "approve" || action === "reject") window.location.href = "/dashboard";
+      else window.location.reload();
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setPending(null);
+    }
   }
   function addItem(){ setItems([...items,{sku:"",description:"",quantity:1,unitPrice:"0.00",lineTotal:"0.00"}]); }
+  function removeItem(index:number) {
+    setItems(items.filter((_,itemIndex)=>itemIndex!==index));
+    setFieldErrors(current=>Object.fromEntries(
+      Object.entries(current).filter(([key])=>!key.startsWith("lineItems"))
+    ));
+  }
 
   return (
     <div className="grid">
@@ -153,6 +187,7 @@ export default function PoReview(props:Props) {
       <div className="card">
         <h2>Checks</h2>
         <p>Extraction: <strong>{props.extractionMethod}</strong></p>
+        {props.extractionWarnings.length>0&&<ul className="warning">{props.extractionWarnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>}
         {items.length===0 ? <p className="warning">Line items not checked</p> : lineMathMismatch ? <p className="error">One or more line items do not add up.</p> : <p className={poMismatch?"error":""}>{poMismatch?"PO total does not match line totals":"PO totals match"}</p>}
         {items.length>0 && <p>Calculated total: ₹{(calculated/100).toLocaleString("en-IN",{minimumFractionDigits:2})}</p>}
       </div>
@@ -160,7 +195,7 @@ export default function PoReview(props:Props) {
         <h2>Line items</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>SKU</th><th>Description</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead>
+            <thead><tr><th>SKU</th><th>Description</th><th>Qty</th><th>Unit price</th><th>Line total</th>{props.editable&&<th>Actions</th>}</tr></thead>
             <tbody>
               {items.map((item,index)=>(
                 <tr key={index}>
@@ -169,20 +204,21 @@ export default function PoReview(props:Props) {
                   <td><input type="number" value={item.quantity} aria-invalid={Boolean(fieldErrors[`lineItems.${index}.quantity`])} onChange={e=>updateItem(index,"quantity",Number(e.target.value))} disabled={!props.editable} />{fieldErrors[`lineItems.${index}.quantity`]&&<span className="field-error">{fieldErrors[`lineItems.${index}.quantity`]}</span>}</td>
                   <td><input type="number" step="0.01" value={item.unitPrice} aria-invalid={Boolean(fieldErrors[`lineItems.${index}.unitPrice`])} onChange={e=>updateItem(index,"unitPrice",e.target.value)} disabled={!props.editable} />{fieldErrors[`lineItems.${index}.unitPrice`]&&<span className="field-error">{fieldErrors[`lineItems.${index}.unitPrice`]}</span>}</td>
                   <td><input type="number" step="0.01" value={item.lineTotal} aria-invalid={Boolean(fieldErrors[`lineItems.${index}.lineTotal`])} onChange={e=>updateItem(index,"lineTotal",e.target.value)} disabled={!props.editable} />{fieldErrors[`lineItems.${index}.lineTotal`]&&<span className="field-error">{fieldErrors[`lineItems.${index}.lineTotal`]}</span>}</td>
+                  {props.editable&&<td><button className="secondary" type="button" onClick={()=>removeItem(index)} disabled={Boolean(pending)} aria-label={`Remove line ${index+1}`}>Remove</button></td>}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         {fieldErrors.lineItems&&<p className="field-error">{fieldErrors.lineItems}</p>}
-        {props.editable && <button className="secondary" style={{marginTop:12}} type="button" onClick={addItem}>Add line</button>}
+        {props.editable && <button className="secondary" style={{marginTop:12}} type="button" onClick={addItem} disabled={Boolean(pending)}>Add line</button>}
       </div>
-      {error && <div className="card error" style={{gridColumn:"1/-1"}}>{error}</div>}
-      {notice && <div className="card" style={{gridColumn:"1/-1"}}>{notice}</div>}
+      {error && <div className="card error" role="alert" aria-live="polite" style={{gridColumn:"1/-1"}}>{error}</div>}
+      {notice && <div className="card" role="status" aria-live="polite" style={{gridColumn:"1/-1"}}>{notice}</div>}
       <div className="card actions" style={{gridColumn:"1/-1"}}>
-        {props.editable && <><button onClick={save} type="button" className="secondary">Save draft</button><button onClick={()=>action("submit")} type="button">Submit</button></>}
-        {props.approverCanDecide && <><button onClick={()=>action("approve")} type="button">Approve</button><button onClick={()=>action("reject")} type="button" className="danger">Reject</button>
-          <label style={{minWidth:320}}>Rejection reason<textarea aria-invalid={Boolean(fieldErrors.reason)} value={reason} onChange={e=>{setReason(e.target.value);clearFieldError("reason");}} />{fieldErrors.reason&&<span className="field-error">{fieldErrors.reason}</span>}</label></>}
+        {props.editable && <><button onClick={save} type="button" className="secondary" disabled={Boolean(pending)}>{pending==="save"?"Saving…":"Save draft"}</button><button onClick={()=>action("submit")} type="button" disabled={Boolean(pending)}>{pending==="submit"?"Submitting…":"Submit"}</button></>}
+        {props.approverCanDecide && <><button onClick={()=>action("approve")} type="button" disabled={Boolean(pending)}>{pending==="approve"?"Approving…":"Approve"}</button><button onClick={()=>action("reject")} type="button" className="danger" disabled={Boolean(pending)}>{pending==="reject"?"Rejecting…":"Reject"}</button>
+          <label style={{minWidth:320}}>Rejection reason<textarea aria-invalid={Boolean(fieldErrors.reason)} value={reason} onChange={e=>{setReason(e.target.value);clearFieldError("reason");}} disabled={Boolean(pending)} />{fieldErrors.reason&&<span className="field-error">{fieldErrors.reason}</span>}</label></>}
       </div>
     </div>
   );

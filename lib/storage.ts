@@ -18,6 +18,13 @@ export async function uploadPdf(buffer: Buffer, key: string) {
   return key;
 }
 
+export async function deletePdf(key: string) {
+  const supabase = getSupabase();
+  const bucket = process.env.SUPABASE_BUCKET || "po-pdfs";
+  const { error } = await supabase.storage.from(bucket).remove([key]);
+  if (error) throw new Error(`PDF cleanup failed: ${error.message}`);
+}
+
 export async function getPdfUrl(key: string) {
   const supabase = getSupabase();
   const bucket = process.env.SUPABASE_BUCKET || "po-pdfs";

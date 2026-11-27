@@ -1,27 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { canDecidePo, getDecisionTransition } from "@/lib/po-access";
+import { decisionBodySchema } from "@/lib/validation";
+import { logError } from "@/lib/logger";
+import { poIdSchema } from "@/lib/validation";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    if (!poIdSchema.safeParse(params.id).success) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     if (!session.roles.includes("APPROVER")) return NextResponse.json({ error: "Approver role required" }, { status: 403 });
-    const body = await request.json();
-    const action = String(body.action || "").toUpperCase();
-    if (!["APPROVE", "REJECT"].includes(action)) return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
-    const reason = String(body.reason || "").trim();
-    if (action === "REJECT" && !reason) return NextResponse.json({ error: "A rejection reason is required" }, { status: 400 });
+    let input: unknown;
+    try {
+      input = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
+    }
+    const parsedBody = decisionBodySchema.safeParse(input);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "Invalid decision" }, { status: 400 });
+    }
+    const { action } = parsedBody.data;
+    const reason = parsedBody.data.reason?.trim() ?? "";
     const po = await prisma.purchaseOrder.findUnique({ where: { id: params.id } });
     if (!po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     if (po.status !== "SUBMITTED") return NextResponse.json({ error: "Only submitted purchase orders can be decided" }, { status: 409 });
-    if (po.creatorId === session.uid) return NextResponse.json({ error: "You cannot approve or reject your own purchase order" }, { status: 403 });
+    if (!canDecidePo(session, po)) return NextResponse.json({ error: "You cannot decide your own purchase order" }, { status: 403 });
 
-    const toStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+    const transition = getDecisionTransition(po.status, action);
+    if (!transition) return NextResponse.json({ error: "Only submitted purchase orders can be decided" }, { status: 409 });
     const recorded = await prisma.$transaction(async (transaction) => {
       const updated = await transaction.purchaseOrder.updateMany({
         where: { id: po.id, status: "SUBMITTED" },
-        data: { status: toStatus }
+        data: { status: transition.toStatus }
       });
       if (updated.count !== 1) return false;
       await transaction.actionHistory.create({
@@ -29,8 +42,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           poId: po.id,
           actorId: session.uid,
           action,
-          fromStatus: "SUBMITTED",
-          toStatus,
+          fromStatus: transition.fromStatus,
+          toStatus: transition.toStatus,
           remark: action === "REJECT" ? reason : null
         }
       });
@@ -38,8 +51,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     });
     if (!recorded) return NextResponse.json({ error: "This purchase order was already decided" }, { status: 409 });
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error(new Date().toISOString(), "PO_DECISION_ERROR", error);
-    return NextResponse.json({ error: "Could not record the decision" }, { status: 500 });
+  } catch (error: unknown) {
+    const eventId = logError("PO_DECISION_ERROR", error);
+    return NextResponse.json({ error: "Could not record the decision", eventId }, { status: 500 });
   }
 }

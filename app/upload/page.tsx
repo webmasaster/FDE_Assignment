@@ -8,11 +8,16 @@ export default function UploadPage() {
     event.preventDefault();
     setError("");
     setUploading(true);
-    const response = await fetch("/api/pos/upload", { method:"POST", body:new FormData(event.currentTarget) });
-    const data = await response.json();
-    setUploading(false);
-    if (!response.ok) setError(data.error || "Upload failed");
-    else window.location.href = `/po/${data.id}${data.unreadable ? "?unreadable=1" : ""}`;
+    try {
+      const response = await fetch("/api/pos/upload", { method:"POST", body:new FormData(event.currentTarget) });
+      const data = await response.json();
+      if (!response.ok) setError(data.error || "Upload failed");
+      else window.location.href = `/po/${data.id}`;
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
   }
   return (
     <main className="main">

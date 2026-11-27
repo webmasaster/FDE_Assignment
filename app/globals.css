@@ -28,3 +28,11 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color:var(--d
 .actions { display:flex; gap:8px; flex-wrap:wrap; }
 .login { max-width:420px; margin:12vh auto; }
 .hidden { display:none; }
+@media (max-width: 700px) {
+  .topbar { height:auto; min-height:64px; padding:12px 16px; gap:12px; flex-wrap:wrap; }
+  .main { margin:20px auto; padding:0 12px; }
+  .grid { grid-template-columns:minmax(0,1fr); }
+  .card[style*="grid-column"] { grid-column:1 !important; }
+  th,td { padding:8px; }
+  .login { margin:8vh 12px; }
+}

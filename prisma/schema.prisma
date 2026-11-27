@@ -32,12 +32,14 @@ model User {
 model PurchaseOrder {
   id              String        @id @default(cuid())
   poNumber        String        @unique
+  poNumberNormalized String      @unique
   poDate          String
   vendorName      String
   documentTotalPaise Int
   calculatedTotalPaise Int
   totalsMatch     Boolean
   extractionMethod String
+  extractionWarnings String[] @default([])
   status          PoStatus      @default(DRAFT)
   originalFileKey String
   originalFileName String
@@ -47,6 +49,9 @@ model PurchaseOrder {
   actions         ActionHistory[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  @@index([creatorId, status, updatedAt])
+  @@index([status, updatedAt])
 }
 
 model LineItem {
@@ -59,6 +64,8 @@ model LineItem {
   unitPricePaise Int
   lineTotalPaise Int
   sortOrder  Int
+
+  @@index([poId, sortOrder])
 }
 
 model ActionHistory {
@@ -72,4 +79,6 @@ model ActionHistory {
   toStatus   PoStatus
   remark     String?
   createdAt  DateTime      @default(now())
+
+  @@index([poId, createdAt])
 }

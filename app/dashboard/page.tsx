@@ -38,7 +38,7 @@ export default async function Dashboard() {
                   <td>{po.vendorName || <span className="muted">Not extracted</span>}</td>
                   <td><span className={`status ${po.status}`}>{po.status}</span></td>
                   <td>{po.creator.email}</td>
-                  <td>{po.updatedAt.toLocaleString("en-IN")}</td>
+                  <td>{po.updatedAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
                   <td><Link href={`/po/${po.id}`}>Open</Link></td>
                 </tr>
               ))}

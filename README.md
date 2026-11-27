@@ -1,67 +1,166 @@
 # PEP Brands FDE Technical Assignment
 
-> Admission number and full name: _add before submission_
+> Admission number: _fill in_
+> Full name: _fill in_
 
-## Live app
+## Submission links
 
-- Live URL: _deployment is still required_
-- Test password for all users: the `SEED_PASSWORD` value in `.env` (defaults to `ChangeMe!123`)
+- Live URL: _not deployed yet_
+- GitHub repository: _create a public repo named `<AdmissionNumber>_mCaffeine_FDE`_
+- AI chat share URL: _add the share link if the tool supports it_
+- Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
+
+## Test users
+
+`npm run db:seed` creates or updates the four test accounts. Every seed run intentionally resets all four password hashes to the current `SEED_PASSWORD`.
+All four accounts use that password; provide it to reviewers separately with the live URL, never in this public README or repository.
 
 | Login | Role |
 |---|---|
-| creator1@pep.local | Creator |
-| creator2@pep.local | Creator |
-| approver1@pep.local | Approver |
-| lead1@pep.local | Creator + Approver |
+| `creator1@pep.local` | Creator |
+| `creator2@pep.local` | Creator |
+| `approver1@pep.local` | Approver |
+| `lead1@pep.local` | Creator + Approver |
 
-## Implemented scope and status
+Use a unique `SEED_PASSWORD` of at least 12 characters with uppercase and lowercase letters, a number, and a symbol. It has no hardcoded default.
 
-The local app implements login, server-enforced roles and PO transitions, action history, PDF upload, PostgreSQL persistence, Supabase Storage, and L1/L2 text-layer extraction. It is not yet publicly deployed, so Core B's public-URL requirement is outstanding.
+## Scope and sample PDFs
 
-`npm run db:seed` creates the four test users and seeds sample 1, the mismatch sample 2, and sample 4 as an unreadable draft for manual entry. Sample 3 is a resent copy of sample 1 and should be uploaded manually to demonstrate duplicate rejection.
+- **Core A:** bcrypt login, role checks, creator ownership, locked statuses, server-validated transitions, rejection remarks, and action history.
+- **Core B code:** PostgreSQL via Prisma, Supabase private object storage, signed PDF links, health endpoints, safe errors and environment configuration. A public deployment is still required.
+- **Part 1 L1 and L2:** text-layer PDF header/total and line-item extraction, a correction form, paise-based arithmetic checks, and unreadable-PDF manual entry.
+- OCR is not implemented; scanned or garbled PDFs are entered manually.
+
+`npm run db:seed` seeds `sample_1_digital.pdf`, `sample_2_mismatch.pdf`, and `sample_4_garbled.pdf`, with sample records split across the two creators. Sample 3 is intentionally not seeded because it duplicates sample 1's PO number; upload it after seeding to demonstrate the duplicate error. Seeding requires a private `po-pdfs` bucket and fails clearly if an upload or database write fails.
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set Neon/Postgres, session and Supabase values.
-2. Run `npm install`.
-3. Run `npm run db:push`.
-4. Run `npm run db:seed`.
-5. Run `npm run dev`.
+1. Install Node.js 20 or newer.
+2. Copy `.env.example` to `.env` and set all six variables listed below.
+3. Install dependencies and generate Prisma Client:
+   ```powershell
+   npm ci
+   npx prisma generate
+   ```
+4. Apply migrations (see **Database migrations** for existing databases):
+   ```powershell
+   npm run db:migrate
+   ```
+5. Seed accounts and sample POs:
+   ```powershell
+   npm run db:seed
+   ```
+6. Start the app:
+   ```powershell
+   npm run dev
+   ```
+7. Open `http://localhost:3000/login`.
 
-`/health` (also available at `/api/health`) returns 503 if PostgreSQL cannot be reached.
+## Environment and Supabase setup
 
-## Architecture
+Required variables (names only in `.env.example`):
+
+- `DATABASE_URL`: Supabase PostgreSQL connection URL. Use a pooler URL appropriate for the host.
+- `SESSION_SECRET`: random value of at least 32 characters.
+- `SUPABASE_URL`: project URL.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only Supabase secret/service-role key. Never prefix it with `NEXT_PUBLIC_`.
+- `SUPABASE_BUCKET`: private bucket name; use `po-pdfs`.
+- `SEED_PASSWORD`: unique seed password of at least 12 characters with uppercase and lowercase letters, a number, and a symbol.
+
+Create a **private** Storage bucket named `po-pdfs`. The app uploads PDFs from the server and opens them through short-lived signed URLs after checking PO access. Never put `.env` or its values in GitHub or this README.
+
+## Database migrations
+
+The initial migration creates the original relational schema. The later additive migration adds normalized PO numbers, extraction warnings, and query indexes. Existing records are preserved. Before the normalized unique index is added, the migration checks for PO numbers that collide after trimming and uppercasing; if any exist, it stops without committing changes so they can be reviewed.
+
+For a **fresh database**, `npm run db:migrate` applies both migrations.
+
+For the existing Supabase database previously initialized with `prisma db push`:
+
+1. Take a database backup.
+2. In Supabase SQL Editor, check for normalization collisions:
+   ```sql
+   SELECT UPPER(BTRIM("poNumber")) AS normalized_number, COUNT(*)
+   FROM "PurchaseOrder"
+   GROUP BY UPPER(BTRIM("poNumber"))
+   HAVING COUNT(*) > 1;
+   ```
+3. If the query returns no rows and the existing schema is the original Prisma schema in this repository, mark the baseline migration as already applied:
+   ```powershell
+   npx prisma migrate resolve --applied 20261127000000_init
+   ```
+4. Apply the additive migration:
+   ```powershell
+   npm run db:migrate
+   ```
+
+Do not run `prisma migrate reset` against data you want to keep. If the baseline schema differs, inspect and reconcile it before marking the baseline.
+
+## Architecture and upload journey
+
+The app uses Next.js 14 App Router, React, TypeScript, Prisma/PostgreSQL, private Supabase Storage, `bcryptjs`, `jose`, `pdf-parse`, and Zod. It is a small Next.js scaffold, not a third-party PO starter.
 
 ```mermaid
 flowchart LR
-  U[Browser] --> N[Next.js app/routes]
-  N -->|Login and PO API| A[Authorization and validation]
-  A -->|Upload bytes| S[(Supabase private bucket)]
-  A -->|Prisma SQL| D[(Hosted PostgreSQL)]
-  D --> A
-  S -->|Signed link| U
-  A --> U
+  Browser --> Next[Next.js pages and API routes]
+  Next --> Auth[JWT session and authorization]
+  Next --> Parse[PDF text extraction and validation]
+  Parse --> Storage[(Private Supabase Storage)]
+  Parse --> DB[(Hosted PostgreSQL via Prisma)]
+  DB --> Next
+  Storage --> Signed[Short-lived signed URL]
+  Signed --> Browser
+  Next --> Browser
 ```
 
-Upload journey: browser sends a multipart PDF to `/api/pos/upload`; the server authenticates and validates the role and size, extracts the text layer, checks for an existing PO number, uploads the original to object storage, creates the DRAFT and line items in PostgreSQL, and returns the PO id.
+Upload journey: the browser posts a multipart PDF to `/api/pos/upload`. The server validates the session, creator role, PDF signature and size; extracts the text layer; checks for a duplicate; uploads the original to private Storage; and inserts the PO and line items in PostgreSQL. If the database insert fails after upload, the server attempts to remove the object. The response returns the PO page ID and extraction warnings.
 
-## Authorization choices
+## Authorization and workflow
 
-- **401:** no valid session on protected API routes.
-- **403:** wrong role or creator attempting to decide their own PO.
-- **404:** a creator trying to open another creator's PO. This avoids disclosing whether the PO exists.
-- Permission checks live in `app/api` routes and are repeated at server level; the UI only exposes allowed actions.
+- `lib/auth.ts` signs and verifies HS256 JWTs with issuer, audience, expiry, and schema-validated claims; the cookie is HTTP-only, SameSite=Lax, and Secure in production.
+- Ownership/status rules are in `lib/po-access.ts`, applied in server-rendered pages and API routes.
+- **401:** missing/invalid session.
+- **403:** authenticated user has the wrong role or attempts to decide their own PO.
+- **404:** a creator opening another user's PO gets the same not-found response as an unknown PO, avoiding existence disclosure.
+- **409:** duplicate PO number or invalid/concurrent state transition.
+- The flow is `DRAFT → SUBMITTED → APPROVED` or `DRAFT → SUBMITTED → REJECTED → SUBMITTED`. Approval/rejection and their action-history entries share a transaction and use a conditional update from `SUBMITTED`.
+- Submit/resubmit checks required values, positive whole quantities, line arithmetic and PO totals on the server. Money is stored as integer paise; the tolerance is ₹1 (100 paise).
+- `/health` and `/api/health` return 200 only when PostgreSQL is reachable, otherwise 503.
 
-The decision route uses a conditional `updateMany` on `status = SUBMITTED`, then appends history, preventing a second decision.
+## PDF extraction and checks
 
-## PDF handling
+`lib/pdf.ts` normalizes text, evaluates whether the text layer is usable, reads PO headers, and recognizes rows beginning with SKU codes. For rows it parses the trailing quantity and currency-marked unit/line amounts, preserving numbers such as `200ml` in descriptions. Wrapped continuation lines are appended to the preceding item. Ambiguous rows are not guessed; extraction warnings are shown on the review page. `sample_4_garbled.pdf` is treated as unreadable and opens in a manual-entry state. OCR could be added by rendering pages to images, running a bounded OCR service, and sending the result through these same checks; OCR output must still be reviewed and verified.
 
-Text-layer PDFs are parsed with `pdf-parse`. A document is considered unreadable when there is too little text or too low an alphanumeric ratio. The user gets an explicit manual-entry state and no extracted garbage. Dates accept ISO, dot/slash/hyphen day-month-year and `15 Nov 2026`. Rupee amounts are parsed into integer paise and all submit checks run server-side. OCR is not implemented; a production next step would render PDF pages to images and run a bounded OCR service, then run the same parser and server checks.
+Amounts are parsed strictly into paise and bounded to the PostgreSQL `INTEGER` range. Dates accept ISO and day-month-year numeric/month-name formats, and invalid calendar dates are rejected. The database enforces PO number uniqueness after uppercase/trim normalization.
 
-## Decisions
+## Tests
 
-Next.js was selected for a single deployed web app and server APIs. PostgreSQL is managed by Prisma. Supabase private Storage supplies signed URLs. Passwords use bcrypt 12 rounds. Signed, HTTP-only JWT cookies provide sessions. Secrets stay in environment variables.
+Run:
 
-## Known limitations
+```powershell
+npm test
+npx prisma validate
+npx tsc --noEmit
+npm run build
+```
 
-Garbled text requires manual entry. Wrapped descriptions and unusual templates may need parser tuning. OCR is optional and not enabled. Public deployment, a public GitHub repository, the admission number/full name, and a complete unedited AI transcript still need to be supplied before submission. Database backups and monitoring also need provider setup.
+The local suite covers money/date edge cases, the four provided PDFs, alternate labels, wrapped/numeric descriptions, Zod request validation, roles, ownership, lead self-approval prevention, and allowed workflow transitions. Full API/database concurrency and storage-failure integration tests still need a separate disposable test project; do not use production records for those tests.
+
+## Deployment
+
+Deployment is not complete and no live URL is claimed. For a free-tier Next.js deployment (for example Vercel):
+
+1. Push the project to a new **public** GitHub repo named `<AdmissionNumber>_mCaffeine_FDE`.
+2. Import that repo into Vercel.
+3. Set all six environment variables in the deployment's server environment.
+4. Ensure the private Supabase bucket and database migrations are ready.
+5. Deploy with `npm run build`; apply database migrations from a controlled deployment step using `npm run db:migrate`.
+6. Test the live health endpoint, login, sample upload, PDF open, duplicate response and approval flow; then add the real URL here.
+
+The current workspace is not a Git repository. Create the named repository on GitHub, then initialize/push this folder from your terminal. If a repository already exists under another name, rename it through **GitHub → Settings → General → Repository name**, then update its local remote URL.
+
+## AI transcript and remaining limitations
+
+`ai-session/session.md` is explicitly a placeholder. Export the actual, unedited conversation from the AI tool into that file and add the real chat share link above if available. Do not invent missing conversation content. Inline autocomplete use must be stated separately by the author.
+
+Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; deployment, repository creation, identity details, final credentials, and transcript export are external submission steps. In-memory rate limiting is intentionally not used because it would be unreliable across serverless instances; protect login with hosting/provider controls if exposed publicly.
