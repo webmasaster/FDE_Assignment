@@ -7,7 +7,6 @@
 
 - Live URL: https://23je0659-mcaffeine-fde.vercel.app
 - GitHub repository: [webmasaster/23JE0659_mCaffeine_FDE](https://github.com/webmasaster/23JE0659_mCaffeine_FDE)
-- AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
 
 ## Test users
@@ -167,6 +166,6 @@ The submission repository is `webmasaster/23JE0659_mCaffeine_FDE`. Update the lo
 
 ## AI transcript and remaining limitations
 
-`ai-session/session.md` is explicitly a placeholder. Export the actual, unedited conversation from the AI tool into that file and add the real chat share link above if available. Do not invent missing conversation content. Inline autocomplete use must be stated separately by the author.
+`ai-session/chat.json` contains the original VS Code Chat JSON export. `ai-session/session.md` records the opening prompts and links to that export. Also state whether you used AI code suggestions that appeared inline while typing (such as VS Code suggestions accepted with Tab). Review the export for sensitive values before sharing it.
 
-Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; final repository confirmation, reviewer credential delivery, and transcript export are still submission tasks. Login throttling is stored in PostgreSQL so it works across serverless instances; provider-level abuse protection is still recommended.
+Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; final repository confirmation, reviewer credential delivery, and the inline-code-suggestions statement are still submission tasks. Login throttling is stored in PostgreSQL so it works across serverless instances; provider-level abuse protection is still recommended.
