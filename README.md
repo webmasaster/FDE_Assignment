@@ -5,7 +5,7 @@
 
 ## Submission links
 
-- Live URL: `https://23je0659-mcaffeine-fde.vercel.app`
+- Live URL: https://23je0659-mcaffeine-fde.vercel.app
 - GitHub repository: [webmasaster/23JE0659_mCaffeine_FDE](https://github.com/webmasaster/23JE0659_mCaffeine_FDE)
 - AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
@@ -13,7 +13,7 @@
 ## Test users
 
 `npm run db:seed` creates or updates the four test accounts. Every seed run intentionally resets all four password hashes to the current `SEED_PASSWORD`.
-All four accounts use that password; provide it to reviewers separately with the live URL, never in this public README or repository.
+All four seeded accounts share this reviewer password: <code>ChangeMe!123</code>. These public demo credentials allow access to creator and approver accounts.
 
 | Login | Role |
 |---|---|
