@@ -5,7 +5,7 @@
 
 ## Submission links
 
-- Live URL: `https://23je0659-mcaffeine-fde.vercel.app`
+- Live URL: (https://23je0659-mcaffeine-fde.vercel.app)
 - GitHub repository: [webmasaster/23JE0659_mCaffeine_FDE](https://github.com/webmasaster/23JE0659_mCaffeine_FDE)
 - AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
