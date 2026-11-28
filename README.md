@@ -5,8 +5,8 @@
 
 ## Submission links
 
-- Live URL: _not deployed yet_
-- GitHub repository: _create a public repo named `23JE0659_mCaffeine_FDE`_
+- Live URL: `https://23je0659-mcaffeine-fde.vercel.app`
+- GitHub repository: `23JE0659_mCaffeine_FDE`_
 - AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
 

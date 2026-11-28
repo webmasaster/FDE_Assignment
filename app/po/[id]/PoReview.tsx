@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { addPaise, calculateLineTotalPaise, parseDate, parseMoney, parseQuantity } from "@/lib/checks";
+import { shouldShowLineExtractionWarning } from "@/lib/extraction-warnings";
 import { isTemporaryPoNumber } from "@/lib/po-number";
 
 type LineItem = { sku:string; description:string; quantity:number; unitPricePaise:number; lineTotalPaise:number };
@@ -55,6 +56,11 @@ export default function PoReview(props:Props) {
     const expected = quantity === null ? null : calculateLineTotalPaise(quantity, unitPrice ?? 0);
     return lineTotal !== null && expected !== null && Math.abs(expected-lineTotal) <= 100;
   });
+  const reviewedLines = items.map((item,index) => ({
+    sku:item.sku,
+    complete:Boolean(item.sku.trim() && item.description.trim() && lineChecks[index]),
+    lineMathMatches:lineChecks[index]
+  }));
   const lineMathMismatch = items.some(item => {
     const quantity = item.quantity.trim() ? parseQuantity(Number(item.quantity)) : null;
     const unitPrice = parseMoney(item.unitPrice);
@@ -65,6 +71,8 @@ export default function PoReview(props:Props) {
   const poMismatch = items.length > 0 && Math.abs(calculated-documentTotal)>100;
   const detailsPass = Boolean(header.poNumber.trim() && parseDate(header.poDate) && header.vendorName.trim() && documentTotal > 0);
   const visibleExtractionWarnings = props.extractionWarnings.filter((warning) => {
+    const lineWarning = shouldShowLineExtractionWarning(warning, reviewedLines);
+    if (lineWarning !== null) return lineWarning;
     if (warning.startsWith("PO number was not recognized")) return !header.poNumber.trim();
     if (warning.startsWith("PO date was not recognized")) return !parseDate(header.poDate);
     if (warning.startsWith("Vendor name was not recognized")) return !header.vendorName.trim();
