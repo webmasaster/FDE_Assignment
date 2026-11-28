@@ -27,7 +27,7 @@ async function main() {
     "sample_4_garbled.pdf"
   ];
   for (const filename of sampleFiles) {
-    const filePath = path.join(process.cwd(), filename);
+    const filePath = path.join(process.cwd(), "reviewer-materials", filename);
     if (!fs.existsSync(filePath)) {
       throw new Error(`Required sample PDF not found: ${filePath}`);
     }
@@ -58,7 +58,7 @@ async function main() {
   ] as const;
 
   for (const [filename, creatorId] of samples) {
-    const filePath = path.join(process.cwd(), filename);
+    const filePath = path.join(process.cwd(), "reviewer-materials", filename);
     const buffer = fs.readFileSync(filePath);
     const extracted = await extractPdf(buffer);
     const poNumber = normalizePoNumber(extracted.poNumber || `DRAFT-${filename.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/-PDF$/, "")}`);

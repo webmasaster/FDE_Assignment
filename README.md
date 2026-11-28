@@ -32,7 +32,7 @@ Use a unique `SEED_PASSWORD` of at least 12 characters with uppercase and lowerc
 - **Part 1 L1 and L2:** text-layer PDF header/total and line-item extraction, a correction form, paise-based arithmetic checks, and unreadable-PDF manual entry.
 - OCR is not implemented; scanned or garbled PDFs are entered manually.
 
-`npm run db:seed` seeds `sample_1_digital.pdf`, `sample_2_mismatch.pdf`, and `sample_4_garbled.pdf`, with sample records split across the two creators. Sample 3 is intentionally not seeded because it duplicates sample 1's PO number; upload it after seeding to demonstrate the duplicate error. Seeding requires a private `po-pdfs` bucket and fails clearly if an upload or database write fails.
+The assignment brief and four reviewer PDFs are organized in the [reviewer-materials folder](reviewer-materials/). `npm run db:seed` seeds `reviewer-materials/sample_1_digital.pdf`, `reviewer-materials/sample_2_mismatch.pdf`, and `reviewer-materials/sample_4_garbled.pdf`, with sample records split across the two creators. Sample 3 is intentionally not seeded because it duplicates sample 1's PO number; upload it after seeding to demonstrate the duplicate error. Seeding requires a private `po-pdfs` bucket and fails clearly if an upload or database write fails.
 
 ## Run locally
 
@@ -133,7 +133,7 @@ Upload journey: the browser posts a multipart PDF to `/api/pos/upload`. The serv
 
 ## PDF extraction and checks
 
-`lib/pdf.ts` normalizes text, evaluates whether the text layer is usable, reads PO headers, and recognizes rows beginning with SKU codes. For rows it parses the trailing quantity and currency-marked unit/line amounts, preserving numbers such as `200ml` in descriptions. Wrapped continuation lines are appended to the preceding item. Ambiguous rows are not guessed; extraction warnings are shown on the review page. `sample_4_garbled.pdf` is treated as unreadable and opens in a manual-entry state. OCR could be added by rendering pages to images, running a bounded OCR service, and sending the result through these same checks; OCR output must still be reviewed and verified.
+`lib/pdf.ts` normalizes text, evaluates whether the text layer is usable, reads PO headers, and recognizes rows beginning with SKU codes. For rows it parses the trailing quantity and currency-marked unit/line amounts, preserving numbers such as `200ml` in descriptions. Wrapped continuation lines are appended to the preceding item. Ambiguous rows are not guessed; extraction warnings are shown on the review page. `reviewer-materials/sample_4_garbled.pdf` is treated as unreadable and opens in a manual-entry state. OCR could be added by rendering pages to images, running a bounded OCR service, and sending the result through these same checks; OCR output must still be reviewed and verified.
 
 Amounts are parsed strictly into paise and bounded to the PostgreSQL `INTEGER` range. Dates accept ISO and day-month-year numeric/month-name formats, and invalid calendar dates are rejected. The database enforces PO number uniqueness after uppercase/trim normalization.
 

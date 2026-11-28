@@ -7,7 +7,7 @@ import { extractPdf, extractPoDate, extractPoNumber, parseLineRow } from "../lib
 import { poUpdateBodySchema } from "../lib/validation";
 
 async function sample(name: string) {
-  return extractPdf(await readFile(path.join(process.cwd(), name)));
+  return extractPdf(await readFile(path.join(process.cwd(), "reviewer-materials", name)));
 }
 
 test("extracts complete data from the clean digital sample", async () => {
