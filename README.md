@@ -6,7 +6,7 @@
 ## Submission links
 
 - Live URL: `https://23je0659-mcaffeine-fde.vercel.app`
-- GitHub repository: `23JE0659_mCaffeine_FDE`_
+- GitHub repository: [webmasaster/23JE0659_mCaffeine_FDE](https://github.com/webmasaster/23JE0659_mCaffeine_FDE)
 - AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
 
@@ -27,7 +27,7 @@ Use a unique `SEED_PASSWORD` of at least 12 characters with uppercase and lowerc
 ## Scope and sample PDFs
 
 - **Core A:** bcrypt login, role checks, creator ownership, locked statuses, server-validated transitions, rejection remarks, and action history.
-- **Core B code:** PostgreSQL via Prisma, Supabase private object storage, signed PDF links, health endpoints, safe errors and environment configuration. A public deployment is still required.
+- **Core B:** PostgreSQL via Prisma, Supabase private object storage, signed PDF links, health endpoints, safe errors and environment configuration. The app is deployed on Vercel at the URL above.
 - Login attempts are counted in PostgreSQL by a one-way hash of the normalized email; five failures in 15 minutes trigger a 15-minute lock. Deployments should also configure provider-level abuse protection.
 - **Part 1 L1 and L2:** text-layer PDF header/total and line-item extraction, a correction form, paise-based arithmetic checks, and unreadable-PDF manual entry.
 - OCR is not implemented; scanned or garbled PDFs are entered manually.
@@ -152,19 +152,21 @@ The local suite covers money/date edge cases, the four provided PDFs, alternate 
 
 ## Deployment
 
-Deployment is not complete and no live URL is claimed. For a free-tier Next.js deployment (for example Vercel):
+The app is deployed to Vercel at the production URL listed above. Vercel detects Next.js and builds with `npm run build`.
 
-1. Push the project to a new **public** GitHub repo named `<AdmissionNumber>_mCaffeine_FDE`.
-2. Import that repo into Vercel.
-3. Set all six environment variables in the deployment's server environment.
-4. Ensure the private Supabase bucket and database migrations are ready.
-5. Deploy with `npm run build`; apply database migrations from a controlled deployment step using `npm run db:migrate`.
-6. Test the live health endpoint, login, sample upload, PDF open, duplicate response and approval flow; then add the real URL here.
+Production configuration:
 
-This workspace has a Git remote configured as `https://github.com/webmasaster/FDE_Assignment.git`. Confirm it is the intended repository and public, then rename it to `<AdmissionNumber>_mCaffeine_FDE` if needed and update the local remote URL. A live deployment URL and admission number are still required before this README can be finalized.
+- Set `DATABASE_URL`, `SESSION_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_BUCKET` in Vercel's **Production** environment. `SEED_PASSWORD` is needed only when running `npm run db:seed`; it is not required by the deployed app.
+- Keep the Supabase Storage bucket private. Never expose `SUPABASE_SERVICE_ROLE_KEY` with a `NEXT_PUBLIC_` prefix.
+- For the serverless runtime, use the Supabase transaction pooler connection string on port `6543` and add `pgbouncer=true` for Prisma. Run `npm run db:migrate` separately from a controlled environment using a direct or session-mode database connection; do not run migrations as part of every Vercel build.
+- The current Supabase database is in Sydney. Set the Vercel Function region to `syd1` to keep server-side database requests near the database.
+- Do not give Preview deployments the Production database and storage credentials. Use a separate staging project or disable Preview deployments.
+- Vercel's default Function request body limit is 4.5 MB including multipart overhead, while this app currently accepts PDFs up to 5 MiB. Reduce the app and upload-page limit to 4 MiB, or configure Vercel's larger request-body option on a compatible plan and runtime.
+
+The submission repository is `webmasaster/23JE0659_mCaffeine_FDE`. Update the local Git remote to this repository if it still points to the previous `webmasaster/FDE_Assignment` URL.
 
 ## AI transcript and remaining limitations
 
 `ai-session/session.md` is explicitly a placeholder. Export the actual, unedited conversation from the AI tool into that file and add the real chat share link above if available. Do not invent missing conversation content. Inline autocomplete use must be stated separately by the author.
 
-Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; deployment, repository creation, final credentials, and transcript export are external submission steps. Login throttling is stored in PostgreSQL so it works across serverless instances; provider-level abuse protection is still recommended.
+Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; final repository confirmation, reviewer credential delivery, and transcript export are still submission tasks. Login throttling is stored in PostgreSQL so it works across serverless instances; provider-level abuse protection is still recommended.
