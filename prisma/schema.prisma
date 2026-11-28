@@ -82,3 +82,11 @@ model ActionHistory {
 
   @@index([poId, createdAt])
 }
+
+model LoginRateLimit {
+  key            String   @id
+  failures       Int      @default(0)
+  windowStartedAt DateTime @default(now())
+  lockedUntil    DateTime?
+  updatedAt      DateTime @updatedAt
+}

@@ -1,12 +1,12 @@
 # PEP Brands FDE Technical Assignment
 
-> Admission number: _fill in_
-> Full name: _fill in_
+> Admission number: 23JE0659
+> Full name: Nitin Kumar
 
 ## Submission links
 
 - Live URL: _not deployed yet_
-- GitHub repository: _create a public repo named `<AdmissionNumber>_mCaffeine_FDE`_
+- GitHub repository: _create a public repo named `23JE0659_mCaffeine_FDE`_
 - AI chat share URL: _add the share link if the tool supports it_
 - Test-user password: set `SEED_PASSWORD` in `.env`; do not commit or publish it.
 
@@ -28,6 +28,7 @@ Use a unique `SEED_PASSWORD` of at least 12 characters with uppercase and lowerc
 
 - **Core A:** bcrypt login, role checks, creator ownership, locked statuses, server-validated transitions, rejection remarks, and action history.
 - **Core B code:** PostgreSQL via Prisma, Supabase private object storage, signed PDF links, health endpoints, safe errors and environment configuration. A public deployment is still required.
+- Login attempts are counted in PostgreSQL by a one-way hash of the normalized email; five failures in 15 minutes trigger a 15-minute lock. Deployments should also configure provider-level abuse protection.
 - **Part 1 L1 and L2:** text-layer PDF header/total and line-item extraction, a correction form, paise-based arithmetic checks, and unreadable-PDF manual entry.
 - OCR is not implemented; scanned or garbled PDFs are entered manually.
 
@@ -71,9 +72,9 @@ Create a **private** Storage bucket named `po-pdfs`. The app uploads PDFs from t
 
 ## Database migrations
 
-The initial migration creates the original relational schema. The later additive migration adds normalized PO numbers, extraction warnings, and query indexes. Existing records are preserved. Before the normalized unique index is added, the migration checks for PO numbers that collide after trimming and uppercasing; if any exist, it stops without committing changes so they can be reviewed.
+The initial migration creates the relational schema. Two additive migrations add normalized PO numbers, extraction warnings and query indexes, then persistent login throttling. Existing records are preserved. Before the normalized unique index is added, the migration checks for PO numbers that collide after trimming and uppercasing; if any exist, it stops without committing changes so they can be reviewed.
 
-For a **fresh database**, `npm run db:migrate` applies both migrations.
+For a **fresh database**, `npm run db:migrate` applies all migrations, including the persistent login-throttle table.
 
 For the existing Supabase database previously initialized with `prisma db push`:
 
@@ -89,10 +90,12 @@ For the existing Supabase database previously initialized with `prisma db push`:
    ```powershell
    npx prisma migrate resolve --applied 20261127000000_init
    ```
-4. Apply the additive migration:
+4. Apply the additive migrations:
    ```powershell
    npm run db:migrate
    ```
+
+The login-throttle migration is additive and is applied after the normalized-PO migration. Do not mark it as applied unless the `LoginRateLimit` table already exists.
 
 Do not run `prisma migrate reset` against data you want to keep. If the baseline schema differs, inspect and reconcile it before marking the baseline.
 
@@ -119,6 +122,7 @@ Upload journey: the browser posts a multipart PDF to `/api/pos/upload`. The serv
 
 - `lib/auth.ts` signs and verifies HS256 JWTs with issuer, audience, expiry, and schema-validated claims; the cookie is HTTP-only, SameSite=Lax, and Secure in production.
 - Ownership/status rules are in `lib/po-access.ts`, applied in server-rendered pages and API routes.
+- Approvers can review submitted POs and open approved/rejected records as read-only history; only submitted POs they did not create are actionable.
 - **401:** missing/invalid session.
 - **403:** authenticated user has the wrong role or attempts to decide their own PO.
 - **404:** a creator opening another user's PO gets the same not-found response as an unknown PO, avoiding existence disclosure.
@@ -144,7 +148,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-The local suite covers money/date edge cases, the four provided PDFs, alternate labels, wrapped/numeric descriptions, Zod request validation, roles, ownership, lead self-approval prevention, and allowed workflow transitions. Full API/database concurrency and storage-failure integration tests still need a separate disposable test project; do not use production records for those tests.
+The local suite covers money/date edge cases, the four provided PDFs, alternate labels, wrapped/numeric descriptions, Zod request validation, roles, ownership, lead self-approval prevention, allowed workflow transitions, and upload cleanup behavior when a database write fails. A database concurrency integration test is included but skipped by default. Run it only with `RUN_DB_INTEGRATION_TESTS=true` and a disposable `DATABASE_URL` whose database name includes `test`; it creates and deletes temporary users and a PO. Live storage-provider failure tests still require a separate disposable Supabase project.
 
 ## Deployment
 
@@ -157,10 +161,10 @@ Deployment is not complete and no live URL is claimed. For a free-tier Next.js d
 5. Deploy with `npm run build`; apply database migrations from a controlled deployment step using `npm run db:migrate`.
 6. Test the live health endpoint, login, sample upload, PDF open, duplicate response and approval flow; then add the real URL here.
 
-The current workspace is not a Git repository. Create the named repository on GitHub, then initialize/push this folder from your terminal. If a repository already exists under another name, rename it through **GitHub → Settings → General → Repository name**, then update its local remote URL.
+This workspace has a Git remote configured as `https://github.com/webmasaster/FDE_Assignment.git`. Confirm it is the intended repository and public, then rename it to `<AdmissionNumber>_mCaffeine_FDE` if needed and update the local remote URL. A live deployment URL and admission number are still required before this README can be finalized.
 
 ## AI transcript and remaining limitations
 
 `ai-session/session.md` is explicitly a placeholder. Export the actual, unedited conversation from the AI tool into that file and add the real chat share link above if available. Do not invent missing conversation content. Inline autocomplete use must be stated separately by the author.
 
-Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; deployment, repository creation, identity details, final credentials, and transcript export are external submission steps. In-memory rate limiting is intentionally not used because it would be unreliable across serverless instances; protect login with hosting/provider controls if exposed publicly.
+Known limitations: OCR is not included; unusual PDF templates may require parser tuning; workflow and storage integration tests need a disposable environment; deployment, repository creation, final credentials, and transcript export are external submission steps. Login throttling is stored in PostgreSQL so it works across serverless instances; provider-level abuse protection is still recommended.

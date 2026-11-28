@@ -6,7 +6,8 @@ export type DecisionAction = "APPROVE" | "REJECT";
 
 export function canViewPo(principal: Principal, po: PoAccessRecord) {
   return po.creatorId === principal.uid ||
-    (principal.roles.includes(Role.APPROVER) && po.status === PoStatus.SUBMITTED);
+    (principal.roles.includes(Role.APPROVER) &&
+      (po.status === PoStatus.SUBMITTED || po.status === PoStatus.APPROVED || po.status === PoStatus.REJECTED));
 }
 
 export function canEditPo(principal: Principal, po: PoAccessRecord) {

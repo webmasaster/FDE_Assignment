@@ -21,6 +21,18 @@ async function main() {
   ) {
     throw new Error("Set a unique SEED_PASSWORD with 12+ characters, upper/lowercase letters, a number, and a symbol.");
   }
+  const sampleFiles = [
+    "sample_1_digital.pdf",
+    "sample_2_mismatch.pdf",
+    "sample_4_garbled.pdf"
+  ];
+  for (const filename of sampleFiles) {
+    const filePath = path.join(process.cwd(), filename);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Required sample PDF not found: ${filePath}`);
+    }
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   const users = [
     ["creator1@pep.local", [Role.CREATOR]],
@@ -47,7 +59,6 @@ async function main() {
 
   for (const [filename, creatorId] of samples) {
     const filePath = path.join(process.cwd(), filename);
-    if (!fs.existsSync(filePath)) continue;
     const buffer = fs.readFileSync(filePath);
     const extracted = await extractPdf(buffer);
     const poNumber = normalizePoNumber(extracted.poNumber || `DRAFT-${filename.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/-PDF$/, "")}`);

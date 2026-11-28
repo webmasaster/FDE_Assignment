@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { calculateLineTotalPaise, parseDate, parseMoney } from "../lib/checks";
 import { extractPdf, extractPoDate, extractPoNumber, parseLineRow } from "../lib/pdf";
+import { poUpdateBodySchema } from "../lib/validation";
 
 async function sample(name: string) {
   return extractPdf(await readFile(path.join(process.cwd(), name)));
@@ -73,14 +75,50 @@ test("classifies garbled sample as unreadable rather than guessing values", asyn
   const result = await sample("sample_4_garbled.pdf");
   assert.equal(result.extractionMethod, "unreadable");
   assert.equal(result.poNumber, "");
+  assert.equal(result.poDate, "");
+  assert.equal(result.vendorName, "");
+  assert.equal(result.documentTotalPaise, 0);
+  assert.equal(result.calculatedTotalPaise, 0);
+  assert.equal(result.totalsMatch, false);
   assert.equal(result.lineItems.length, 0);
   assert.match(result.warnings.join(" "), /manually/i);
+});
+
+test("garbled sample can be corrected manually into a valid checked PO draft", async () => {
+  const result = await sample("sample_4_garbled.pdf");
+  assert.equal(result.extractionMethod, "unreadable");
+
+  const manualDraft = poUpdateBodySchema.safeParse({
+    poNumber: "FDE-TST-017",
+    poDate: "15-11-2026",
+    vendorName: "Manual test supplier",
+    documentTotal: "100.00",
+    lineItems: [{
+      sku: "MC-001",
+      description: "Body wash 200ml",
+      quantity: 4,
+      unitPrice: "25.00",
+      lineTotal: "100.00"
+    }]
+  });
+
+  assert.equal(manualDraft.success, true);
+  assert.equal(parseDate("15-11-2026"), "2026-11-15");
+  const unitPrice = parseMoney("₹25.00");
+  const lineTotal = parseMoney("₹100.00");
+  const printedTotal = parseMoney("₹100.00");
+  assert.equal(unitPrice, 2_500);
+  assert.equal(lineTotal, 10_000);
+  assert.equal(printedTotal, 10_000);
+  assert.equal(calculateLineTotalPaise(4, unitPrice!), lineTotal);
+  assert.ok(Math.abs(lineTotal - printedTotal) <= 100);
 });
 
 test("parses alternate header labels and date formats", () => {
   assert.equal(extractPoNumber("Order No. : PO-2026-021"), "PO-2026-021");
   assert.equal(extractPoNumber("P.O. # PO-2026-022"), "PO-2026-022");
   assert.equal(extractPoNumber("Purchase Order No. PO-2026-023"), "PO-2026-023");
+  assert.equal(extractPoNumber("PO Number: PO-2026-024PO Date: 15-11-2026"), "PO-2026-024");
   for (const date of ["15-11-2026", "15/11/2026", "15.11.2026", "15 Nov 2026"]) {
     assert.equal(extractPoDate(`Order Date : ${date}`), date);
   }

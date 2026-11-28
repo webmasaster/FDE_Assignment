@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { canDecidePo, getDecisionTransition } from "@/lib/po-access";
+import { isTemporaryPoNumber } from "@/lib/po-number";
 import { decisionBodySchema } from "@/lib/validation";
 import { logError } from "@/lib/logger";
 import { poIdSchema } from "@/lib/validation";
@@ -28,12 +29,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     if (po.status !== "SUBMITTED") return NextResponse.json({ error: "Only submitted purchase orders can be decided" }, { status: 409 });
     if (!canDecidePo(session, po)) return NextResponse.json({ error: "You cannot decide your own purchase order" }, { status: 403 });
+    if (parsedBody.data.action === "APPROVE" && isTemporaryPoNumber(po.poNumber)) {
+      return NextResponse.json({ error: "The creator must enter the actual PO number before approval" }, { status: 409 });
+    }
 
     const transition = getDecisionTransition(po.status, action);
     if (!transition) return NextResponse.json({ error: "Only submitted purchase orders can be decided" }, { status: 409 });
     const recorded = await prisma.$transaction(async (transaction) => {
       const updated = await transaction.purchaseOrder.updateMany({
-        where: { id: po.id, status: "SUBMITTED" },
+        where: { id: po.id, status: "SUBMITTED", updatedAt: po.updatedAt },
         data: { status: transition.toStatus }
       });
       if (updated.count !== 1) return false;

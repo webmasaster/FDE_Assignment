@@ -34,7 +34,7 @@ type ParsedRow = Omit<ExtractedLine, "lineMathMatches">;
  * Matches common SKU formats such as MC-001, HY-203 and MC-027-ABC.
  * The trailing asterisk is accepted for PDFs that mark a SKU with a footnote.
  */
-const SKU_AT_START = /^(?:\d+\s+)?([A-Z0-9]+(?:-[A-Z0-9]+)+)\*?(?:\s+|$)/i;
+const SKU_AT_START = /^(?:\d+\s+)?([A-Z0-9]+-\d+(?:-[A-Z0-9]+)*)\*?(?:\s+|(?=[A-Z])|$)/i;
 
 /**
  * Supports both Indian and international thousands grouping:
@@ -203,7 +203,10 @@ export function extractPoNumber(text: string): string {
   const fallbackMatch = normalized.match(new RegExp(`\\b${PO_NUMBER_PATTERN}\\b`, "i"));
   const poNumber = labelledMatch?.[1] ?? fallbackMatch?.[1] ?? "";
 
-  return poNumber.toUpperCase();
+  // Some PDF text layers concatenate the next "PO Date" label directly to
+  // the value (for example, PO-2026-001PO). Remove that label fragment when
+  // it follows a numeric identifier suffix.
+  return poNumber.replace(/(?<=\d)PO$/i, "").toUpperCase();
 }
 
 /** Extracts a date next to PO Date, Order Date, or Date labels. */

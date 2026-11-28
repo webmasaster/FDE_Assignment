@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/auth";
 import { loginBodySchema } from "@/lib/validation";
 import { logError } from "@/lib/logger";
+import { clearLoginFailures, isLoginThrottled, recordLoginFailure } from "@/lib/login-throttle";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,10 +17,15 @@ export async function POST(request: NextRequest) {
     const body = loginBodySchema.safeParse(input);
     if (!body.success) return NextResponse.json({ error: "Enter a valid email and password" }, { status: 400 });
     const { email, password } = body.data;
+    if (await isLoginThrottled(email)) {
+      return NextResponse.json({ error: "Too many failed sign-in attempts. Try again in 15 minutes." }, { status: 429 });
+    }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      await recordLoginFailure(email);
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
+    await clearLoginFailures(email);
     await createSession(user);
     return NextResponse.json({ ok: true });
   } catch (error) {

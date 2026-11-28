@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { addPaise, calculateLineTotalPaise, parseDate } from "@/lib/checks";
 import { canSubmitPo, getSubmissionTransition } from "@/lib/po-access";
+import { isTemporaryPoNumber } from "@/lib/po-number";
 import { getErrorCode, logError } from "@/lib/logger";
 import { poIdSchema } from "@/lib/validation";
 
@@ -17,7 +18,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     if (po.creatorId !== session.uid) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     const transition = getSubmissionTransition(po.status);
     if (!canSubmitPo(session, po) || !transition) return NextResponse.json({ error: "Purchase order is locked" }, { status: 409 });
-    if (!po.poNumber.trim() || !parseDate(po.poDate) || !po.vendorName.trim() || po.documentTotalPaise <= 0) {
+    if (!po.poNumber.trim() || isTemporaryPoNumber(po.poNumber) || !parseDate(po.poDate) || !po.vendorName.trim() || po.documentTotalPaise <= 0) {
       return NextResponse.json({ error: "Required fields are missing" }, { status: 400 });
     }
     if (po.lineItems.length === 0) {
@@ -29,7 +30,9 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
         !item.description.trim() ||
         !Number.isSafeInteger(item.quantity) ||
         item.quantity <= 0 ||
-        item.unitPricePaise <= 0
+        item.unitPricePaise <= 0 ||
+        !Number.isSafeInteger(item.lineTotalPaise) ||
+        item.lineTotalPaise <= 0
       ) return NextResponse.json({ error: "Each line needs a SKU, description, positive whole quantity and positive prices" }, { status: 400 });
       const expectedLineTotal = calculateLineTotalPaise(item.quantity, item.unitPricePaise);
       if (expectedLineTotal === null) return NextResponse.json({ error: "Line-item amount exceeds the supported range" }, { status: 400 });

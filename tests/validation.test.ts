@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { decisionBodySchema, loginBodySchema, normalizePoNumber, poUpdateBodySchema } from "../lib/validation";
+import { isTemporaryPoNumber } from "../lib/po-number";
 
 test("validates and normalizes login input", () => {
   const parsed = loginBodySchema.safeParse({ email: " Creator1@pep.local ", password: "example-password" });
@@ -49,4 +50,23 @@ test("normalizes PO number case and whitespace consistently", () => {
     documentTotal: "1",
     lineItems: []
   }).success, false);
+});
+
+test("recognizes internal temporary PO identifiers without hiding real PO numbers", () => {
+  assert.equal(isTemporaryPoNumber("DRAFT-47FC9C87"), true);
+  assert.equal(isTemporaryPoNumber("DRAFT-SAMPLE-4-GARBLED"), true);
+  assert.equal(isTemporaryPoNumber("PO-2026-001"), false);
+  assert.equal(isTemporaryPoNumber("DRAFT-TEST-001"), false);
+});
+
+test("prevents saving a generated temporary PO identifier as the document number", () => {
+  const base = {
+    poNumber: "DRAFT-47FC9C87",
+    poDate: "15-11-2026",
+    vendorName: "ABC Industries",
+    documentTotal: "1",
+    lineItems: []
+  };
+  assert.equal(poUpdateBodySchema.safeParse(base).success, false);
+  assert.equal(poUpdateBodySchema.safeParse({ ...base, poNumber: "FDE-TST-017" }).success, true);
 });

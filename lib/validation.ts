@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_DB_INT } from "./checks";
+import { isTemporaryPoNumber } from "./po-number";
 
 const moneyInputSchema = z.union([
   z.string().trim().min(1).max(64),
@@ -27,7 +28,8 @@ export const decisionBodySchema = z.object({
 });
 
 export const poUpdateBodySchema = z.object({
-  poNumber: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
+  poNumber: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/)
+    .refine((value) => !isTemporaryPoNumber(value), "Enter the actual PO number from the document"),
   poDate: z.string().trim().min(1).max(50),
   vendorName: z.string().trim().min(1).max(250),
   documentTotal: moneyInputSchema,

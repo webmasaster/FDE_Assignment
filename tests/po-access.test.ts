@@ -26,10 +26,18 @@ test("creators are restricted to their own POs and editable states", () => {
 });
 
 test("approvers view submitted POs but cannot edit them", () => {
+  const creator1Approved = { creatorId: creator1.uid, status: PoStatus.APPROVED };
+  const creator1Rejected = { creatorId: creator1.uid, status: PoStatus.REJECTED };
   assert.equal(canViewPo(approver1, creator1Submitted), true);
+  assert.equal(canViewPo(approver1, creator1Approved), true);
+  assert.equal(canViewPo(approver1, creator1Rejected), true);
   assert.equal(canViewPo(approver1, creator1Draft), false);
   assert.equal(canEditPo(approver1, creator1Submitted), false);
+  assert.equal(canEditPo(approver1, creator1Approved), false);
+  assert.equal(canEditPo(approver1, creator1Rejected), false);
   assert.equal(canDecidePo(approver1, creator1Submitted), true);
+  assert.equal(canDecidePo(approver1, creator1Approved), false);
+  assert.equal(canDecidePo(approver1, creator1Rejected), false);
 });
 
 test("lead can decide another creator's PO but not their own", () => {
